@@ -1,0 +1,280 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Zodiac Galaxy</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;1,500&family=DM+Mono:wght@400&display=swap">
+<style>
+/* Layout: full-bleed spinning galaxy on canvas; one info card pinned to the bottom. Single dark look by choice. */
+:root {
+  --void: #05040d;
+  --ink: #ece8ff;
+  --dim: #9a94c4;
+  --ember: #ffb86b;
+  --nebula: #8f7bff;
+  --display: "Cormorant Garamond", Georgia, serif;
+  --mono: "DM Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: radial-gradient(ellipse at 50% 45%, #14102e 0%, var(--void) 70%);
+  color: var(--ink);
+  font-family: var(--mono);
+  overflow: hidden;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 16px;
+  box-sizing: border-box;
+}
+#sci { margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(143, 123, 255, .25); }
+#rc { width: 100%; height: 72px; display: block; margin-top: 8px; }
+#sky { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: manipulation; }
+header { position: relative; pointer-events: none; }
+h1 { font: italic 500 clamp(1.8rem, 6vw, 3rem)/1.05 var(--display); margin: 0; text-wrap: balance; }
+header p { margin: 6px 0 0; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+#bar { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); top: calc(16px + env(safe-area-inset-top, 0px)); display: flex; flex-direction: column; gap: 8px; }
+#bar button {
+  font: 12px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink); cursor: pointer;
+  background: rgba(12, 9, 30, .72); border: 1px solid rgba(143, 123, 255, .45); border-radius: 999px; padding: 8px 14px;
+}
+#bar button:hover { border-color: var(--ember); color: var(--ember); }
+#bar button:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
+header { max-width: calc(100% - 120px); }
+#card {
+  position: fixed; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px));
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px)); max-width: 420px;
+  padding: 14px 16px; background: rgba(12, 9, 30, .72); border: 1px solid rgba(143, 123, 255, .35);
+  border-radius: 10px; backdrop-filter: blur(8px);
+}
+#card h2 { margin: 0; font: 500 1.7rem/1.1 var(--display); color: var(--ember); }
+#card dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 10px 0 0; font-size: 12px; }
+#card dt { color: var(--dim); text-transform: uppercase; letter-spacing: .1em; }
+#card dd { margin: 0; }
+#card small { display: block; margin-top: 10px; color: var(--dim); font-size: 11px; }
+</style>
+
+<canvas id="sky" aria-label="Animated spiral galaxy with twelve zodiac planets"></canvas>
+<header>
+  <h1>Zodiac Galaxy</h1>
+  <p>Tap a planet · tap space · drag to tilt and spin</p>
+</header>
+<nav id="bar">
+  <button id="warp" type="button">Warp</button>
+  <button id="hue" type="button">Recolor</button>
+  <button id="nova" type="button">Supernova</button>
+  <button id="math" type="button">Math</button>
+</nav>
+<section id="card" aria-live="polite">
+  <h2 id="n"></h2>
+  <dl>
+    <dt>Element</dt><dd id="e"></dd>
+    <dt>Ruler</dt><dd id="r"></dd>
+    <dt>Dates</dt><dd id="d"></dd>
+  </dl>
+  <small id="note"></small>
+  <div id="sci">
+    <dl>
+      <dt>Distance</dt><dd id="kr"></dd>
+      <dt>Speed</dt><dd id="kv"></dd>
+      <dt>Galactic year</dt><dd id="kt"></dd>
+    </dl>
+    <canvas id="rc" width="360" height="90" aria-label="Rotation curve: orbital speed against distance from the center"></canvas>
+    <small id="eq">v(r) = 240 · r / (r + 0.25) km/s &nbsp;·&nbsp; T = 2πr / v<br>Arms: r = 0.04 · e<sup>0.55θ</sup>, pitch angle arctan(0.55) ≈ 29°</small>
+  </div>
+</section>
+
+<script>
+const SIGNS = [
+  ["Aries","♈","Fire","Mars","Mar 21 – Apr 19","#ff6b5b"],
+  ["Taurus","♉","Earth","Venus","Apr 20 – May 20","#7bd88f"],
+  ["Gemini","♊","Air","Mercury","May 21 – Jun 20","#ffe27a"],
+  ["Cancer","♋","Water","Moon","Jun 21 – Jul 22","#bfd4ff"],
+  ["Leo","♌","Fire","Sun","Jul 23 – Aug 22","#ffa63d"],
+  ["Virgo","♍","Earth","Mercury","Aug 23 – Sep 22","#a8e0a0"],
+  ["Libra","♎","Air","Venus","Sep 23 – Oct 22","#ff9ccf"],
+  ["Scorpio","♏","Water","Pluto & Mars","Oct 23 – Nov 21","#c35cff"],
+  ["Sagittarius","♐","Fire","Jupiter","Nov 22 – Dec 21","#ff8a4c"],
+  ["Capricorn","♑","Earth","Saturn","Dec 22 – Jan 19","#9fb3a8"],
+  ["Aquarius","♒","Air","Uranus","Jan 20 – Feb 18","#5ce1ff"],
+  ["Pisces","♓","Water","Neptune","Feb 19 – Mar 20","#6f8cff"]
+];
+const TODAY = 7; // Scorpio: the Sun is here from Oct 23 to Nov 21
+
+const cv = document.getElementById("sky"), ctx = cv.getContext("2d");
+const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let W, H, R, cx, cy, stars = [], dpr = 1, pick = TODAY;
+let TILT = 0.5, spin = 1, spinTarget = 1, rot = 0, hueShift = 0, flash = 0;
+const fx = [];
+function burst(x, y, n, speed, col) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * 6.283, v = (0.3 + Math.random()) * speed;
+    fx.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, l: 1, k: 3, c: col || `hsl(${Math.random() * 360},90%,70%)` });
+  }
+}
+document.getElementById("warp").onclick = () => {
+  spinTarget = 16; flash = 1; setTimeout(() => { spinTarget = 1; }, 2200);
+};
+document.getElementById("hue").onclick = () => { hueShift = (hueShift + 70) % 360; flash = 0.4; };
+document.getElementById("nova").onclick = () => burst(cx, cy, 160, 7, null);
+
+// Science panel: flat rotation curve v = 240 r/(r+0.25) km/s, r in units of 50 kly
+let math = true;
+const sci = document.getElementById("sci"), rc = document.getElementById("rc"), rx = rc.getContext("2d");
+document.getElementById("math").onclick = () => { math = !math; sci.hidden = !math; if (math) drawSci(); };
+function drawSci() {
+  const rad = planets[pick].rad, v = 240 * rad / (rad + 0.25);
+  kr.textContent = (rad * 50).toFixed(1) + " kly";
+  kv.textContent = v.toFixed(0) + " km/s";
+  kt.textContent = (2 * Math.PI * rad * 50e3 * 9.461e12 / v / 3.156e13).toFixed(0) + " Myr";
+  const w = rc.width, h = rc.height, ox = 30, oy = h - 16, pw = w - ox - 8, ph = oy - 8;
+  rx.clearRect(0, 0, w, h);
+  rx.strokeStyle = "#5b53a0"; rx.lineWidth = 1; rx.beginPath(); rx.moveTo(ox, 6); rx.lineTo(ox, oy); rx.lineTo(w - 6, oy); rx.stroke();
+  rx.fillStyle = "#9a94c4"; rx.font = "10px monospace";
+  rx.textAlign = "right"; rx.fillText("240", ox - 3, 14); rx.fillText("0", ox - 3, oy);
+  rx.textAlign = "center"; rx.fillText("0", ox, h - 3); rx.fillText("50 kly", w - 24, h - 3);
+  rx.strokeStyle = "#8f7bff"; rx.lineWidth = 2; rx.beginPath();
+  for (let q = 0; q <= 1.001; q += 0.02) {
+    const x = ox + q * pw, y = oy - (240 * q / (q + 0.25)) / 250 * ph;
+    q ? rx.lineTo(x, y) : rx.moveTo(x, y);
+  }
+  rx.stroke();
+  rx.fillStyle = SIGNS[pick][5]; rx.beginPath(); rx.arc(ox + rad * pw, oy - v / 250 * ph, 4, 0, 6.283); rx.fill();
+}
+
+function resize() {
+  dpr = Math.min(devicePixelRatio || 1, 2);
+  W = innerWidth; H = innerHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  cx = W / 2; cy = H * 0.48; R = Math.min(W * 0.48, H * 0.42 / TILT);
+  const n = Math.round(Math.min(2600, W * H / 380));
+  stars = Array.from({ length: n }, (_, i) => {
+    const r = Math.pow(Math.random(), 1.5);
+    const arm = i % 4;
+    const th = r > 0.04 ? Math.log(r / 0.04) / 0.55 : 0; // logarithmic spiral r = 0.04 e^(0.55 th)
+    const a = arm * Math.PI / 2 + th + (Math.random() - 0.5) * (0.7 - r * 0.3);
+    const hue = 215 + r * 90 + Math.random() * 25;
+    return { r, a, s: Math.random() * 1.4 + 0.3, h: hue, t: Math.random() * 6.28 };
+  });
+}
+addEventListener("resize", resize);
+resize();
+
+const planets = SIGNS.map((s, i) => ({ i, rad: 0.26 + i * 0.06, a: i * Math.PI / 6, x: 0, y: 0 }));
+
+function show(i) {
+  const s = SIGNS[i]; pick = i;
+  n.textContent = s[1] + "︎ " + s[0]; e.textContent = s[2]; r.textContent = s[3]; d.textContent = s[4];
+  note.textContent = i === TODAY ? "The Sun is in Scorpio today, 29 October." : "";
+  n.style.color = s[5];
+  drawSci();
+}
+show(TODAY);
+
+function frame(t) {
+  const time = calm ? 0 : t / 1000;
+  spin += (spinTarget - spin) * 0.04;
+  if (!calm) rot += spin * 0.016;
+  ctx.clearRect(0, 0, W, H);
+  ctx.globalCompositeOperation = "lighter";
+  // core glow
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.45);
+  g.addColorStop(0, "rgba(255,214,150,.55)"); g.addColorStop(.35, "rgba(160,120,255,.18)"); g.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = g; ctx.save(); ctx.translate(cx, cy); ctx.scale(1, TILT * 1.4); ctx.translate(-cx, -cy);
+  ctx.fillRect(cx - R, cy - R, R * 2, R * 2); ctx.restore();
+  // stars: inner ones orbit faster
+  for (const s of stars) {
+    const ang = s.a + rot * 0.05 * (1 + 0.35 / (0.25 + s.r));
+    const x = cx + Math.cos(ang) * s.r * R;
+    const y = cy + Math.sin(ang) * s.r * R * TILT;
+    const tw = 0.6 + 0.4 * Math.sin(time * 1.5 + s.t);
+    ctx.fillStyle = `hsla(${s.h + hueShift},80%,${70 - s.r * 20}%,${(0.9 - s.r * 0.45) * tw})`;
+    ctx.fillRect(x, y, s.s, s.s);
+  }
+  // shooting stars and bursts
+  if (!calm && Math.random() < 0.01) {
+    const v = 7 + Math.random() * 6;
+    fx.push({ x: Math.random() * W, y: Math.random() * H * 0.4, vx: -v, vy: v * 0.5, l: 1, k: 6, c: "#fff" });
+  }
+  for (let i = fx.length - 1; i >= 0; i--) {
+    const p = fx[i];
+    p.x += p.vx; p.y += p.vy; p.vx *= p.k === 3 ? 0.97 : 1; p.vy *= p.k === 3 ? 0.97 : 1; p.l -= p.k === 3 ? 0.014 : 0.012;
+    if (p.l <= 0) { fx.splice(i, 1); continue; }
+    ctx.globalAlpha = p.l; ctx.strokeStyle = p.c; ctx.lineWidth = p.k === 3 ? 2 : 1.6;
+    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx * p.k, p.y - p.vy * p.k); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  if (flash > 0.01) {
+    ctx.fillStyle = `rgba(190,170,255,${flash * 0.25})`; ctx.fillRect(0, 0, W, H); flash *= 0.92;
+  }
+  ctx.globalCompositeOperation = "source-over";
+  if (math) {
+    // distance rings in kly and the logarithmic spiral arm pattern, which turns slower than the stars (density wave)
+    ctx.lineWidth = 1; ctx.font = "10px " + getComputedStyle(document.body).fontFamily; ctx.textAlign = "right";
+    for (let k = 1; k <= 5; k++) {
+      ctx.strokeStyle = "rgba(180,170,255,.16)"; ctx.setLineDash([3, 5]);
+      ctx.beginPath(); ctx.ellipse(cx, cy, k * 0.2 * R, k * 0.2 * R * TILT, 0, 0, 6.283); ctx.stroke();
+      ctx.fillStyle = "rgba(180,170,255,.7)"; ctx.fillText(k * 10 + " kly", cx + k * 0.2 * R - 3, cy - 3);
+    }
+    ctx.setLineDash([]); ctx.strokeStyle = "rgba(255,184,107,.45)";
+    for (let k = 0; k < 4; k++) {
+      ctx.beginPath();
+      for (let th = 0; th <= 5.9; th += 0.1) {
+        const rr = 0.04 * Math.exp(0.55 * th), ang = k * Math.PI / 2 + th + rot * 0.067;
+        const x = cx + Math.cos(ang) * rr * R, y = cy + Math.sin(ang) * rr * R * TILT;
+        th ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.stroke();
+    }
+  }
+  // zodiac planets
+  for (const p of planets) {
+    const sg = SIGNS[p.i];
+    const ang = p.a + rot * 0.35 / Math.sqrt(p.rad + 0.3);
+    p.x = cx + Math.cos(ang) * p.rad * R * 1.6 / 1.6;
+    p.y = cy + Math.sin(ang) * p.rad * R * TILT;
+    ctx.strokeStyle = "rgba(180,170,255,.07)"; ctx.beginPath();
+    ctx.ellipse(cx, cy, p.rad * R, p.rad * R * TILT, 0, 0, 6.283); ctx.stroke();
+    const big = p.i === pick;
+    const rr = big ? 8 : 5;
+    const halo = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, rr * 3);
+    halo.addColorStop(0, sg[5]); halo.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.globalAlpha = big ? 0.55 : 0.3; ctx.fillStyle = halo;
+    ctx.beginPath(); ctx.arc(p.x, p.y, rr * 3, 0, 6.283); ctx.fill();
+    ctx.globalAlpha = 1; ctx.fillStyle = sg[5];
+    ctx.beginPath(); ctx.arc(p.x, p.y, rr, 0, 6.283); ctx.fill();
+    ctx.font = (big ? 16 : 12) + "px " + getComputedStyle(document.body).fontFamily;
+    ctx.fillStyle = "#ece8ff"; ctx.textAlign = "center";
+    ctx.fillText(sg[1] + "︎", p.x, p.y - rr - 6);
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+let drag = null;
+cv.addEventListener("pointerdown", ev => {
+  drag = { x: ev.clientX, y: ev.clientY, moved: 0 };
+  cv.setPointerCapture(ev.pointerId);
+});
+cv.addEventListener("pointermove", ev => {
+  if (!drag) return;
+  const dx = ev.clientX - drag.x, dy = ev.clientY - drag.y;
+  drag.moved += Math.abs(dx) + Math.abs(dy);
+  drag.x = ev.clientX; drag.y = ev.clientY;
+  TILT = Math.min(0.95, Math.max(0.2, TILT + dy * 0.002));
+  spin += dx * 0.05;
+});
+cv.addEventListener("pointerup", ev => {
+  if (!drag) return;
+  const moved = drag.moved; drag = null;
+  if (moved > 8) return;
+  let best = null, bd = 34 * 34;
+  for (const p of planets) {
+    const d2 = (p.x - ev.clientX) ** 2 + (p.y - ev.clientY) ** 2;
+    if (d2 < bd) { bd = d2; best = p; }
+  }
+  if (best) { show(best.i); burst(best.x, best.y, 30, 3, SIGNS[best.i][5]); }
+  else burst(ev.clientX, ev.clientY, 70, 5, null);
+});
+</script>
+
+</body></html>
